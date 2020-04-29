@@ -1,4 +1,4 @@
-#Import Libraries
+#Import Libraries; (Some installations may required to be installed before running this code)
 import pandas as pd
 import numpy as np
 import glob as glob
@@ -16,9 +16,7 @@ from sklearn.preprocessing import LabelEncoder
 from IPython.display import Image
 import matplotlib.pyplot as plt
 
-#Test one: MaxDepth=range(1,31),Impurity=0.0,MaxLeaf=None
-#Test two: MaxDepth=None,Impurity=0.0,MaxLeaf=range(2,31)
-#Test three: MaxDepth=None,Impurity=[.00005,.0001,.0005,.001,.005,.01,.05,.1,.5,1],MaxLeaf=None
+#Criteria for each Testing Parameters
 Criterion = ['entropy', 'gini']
 Test1 = {'MaxDepth': range(1,31),'Impurity': 0.0,'MaxLeaf': None,'Name': "Max_Depth",'Table_Name': "Max_Depth",'TwoParameters': False}
 Test2 = {'MaxDepth': None,'Impurity': 0.0,'MaxLeaf': range(2,31),'Name': "Max_Leaf_Nodes",'Table_Name': "Max_Leaf_Nodes",'TwoParameters': False}
@@ -26,6 +24,8 @@ Test3 = {'MaxDepth': None,'Impurity': [.00005,.0001,.0005,.001,.005,.01,.05,.1,.
 Test4 = {'MaxDepth': range(1,31),'Impurity': [.00005,.0001,.0005,.001,.005,.01,.05,.1,.5,1],'MaxLeaf': None,'Name': "Impurity_Decreased_Plus_Max_Depth",'Table_Name': "Max_Depth",'TwoParameters': True}
 Test5 = {'MaxDepth': None,'Impurity': [.00005,.0001,.0005,.001,.005,.01,.05,.1,.5,1],'MaxLeaf': range(2,31),'Name': "Impurity_Decreased_Plus_Max_Leaf_Nodes",'Table_Name': "Max_Leaf_Nodes",'TwoParameters': True}
 Test_List = [Test1,Test2,Test3,Test4,Test5]
+#This path is used multiple times, stored first half to make lines shorter
+originalPath = "/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/"
 
 #All UNSW Attributes
 def UNSW_DataSet_Parameters():
@@ -44,10 +44,10 @@ def UNSW_DataSet_Parameters():
     }
     #Columns to review UNSW data and add to dictionary
     UNSWcols = [0,1,2,3,11,45]
-    path = "/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/UNSW_Data_Set/"
+    path = originalPath+"UNSW_Data_Set/"
     data_set_path = path +"UNSWDataSet.csv"
     attack_names_path= path +"UNSWDataSetAttackNames.csv"
-    pathD = "/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/UNSW-NB15"
+    pathD = originalPath+"UNSW-NB15"
     return data_set_path,attack_names_path, pathD, None, None, mappingUNSW, UNSWcols, 44, 45, 10, [1,3], ["Benign"], [47]
 
 #Loads the data set in order to get it ready to use
@@ -61,8 +61,10 @@ def Load_Data_Set():
     #attackNames = pd.read_csv(attack_names_path, header=header, index_col=indexCol)
     #attackNames = attackNames.iloc[:,1]
     #attackNames = attackNames.unique()
-
+    #print(list(attackNames).index('Benign'))
+    #print(list(attackNames).index('Analysis'))
     print("Pre-processing data...")
+
     #get formatted pandas dataset
     dataset = formatData(pathD, header, indexCol)
 
@@ -91,7 +93,8 @@ def Load_Data_Set():
             attackNames = dataset.iloc[:,columnL]
         dataset.iloc[:,columnL] = encodeData.fit_transform(dataset.iloc[:,columnL])
     
-    return dataset,attackNames,labelCol
+    attackNames = attackNames.unique()
+    return dataset,list(attackNames),labelCol
 
 #Formats all csv files into one Dataframe
 def formatData(path, head, indexCol):
@@ -130,19 +133,20 @@ def trainModels(dataset,labelCol):
     return X,y,X_train,y_train,X_test,y_test
 
 #Creates Tree Model and Returns predicted Accuracy
-def CreateModel(Criterion,Test_Data,X,X_train,y_train,X_test,y_test,name,attackNames):
+def CreateModel(Criterion,Impurity,MaxDepth,MaxLeaf,Test_Data,X,X_train,y_train,X_test,y_test,name,attackNames):
     print("Creating Models")
-    model = DecisionTreeClassifier(criterion=Criterion, min_impurity_decrease=['Impurity'],
-                                    max_depth= Test_Data['MaxDepth'], max_leaf_nodes=['MaxLeaf'])
+    model = DecisionTreeClassifier(criterion=Criterion, min_impurity_decrease=Impurity,
+                                    max_depth= MaxDepth, max_leaf_nodes=MaxLeaf)
     
     #Training the decision tree classifier 
     model.fit(X_train,y_train)
     print("Training Decision Tree Complete")
 
     #print specific trees, because png files cannot store too much data without sizing it down
-    if (Test_Data['MaxDepth']!=0 and Test_Data['MaxDepth']<10):
-        #printModels(model=model,X=X,name=name,attackNames=attackNames)
-        print('Nothig Printed')
+    if (Test_Data['MaxDepth']!= None ):
+        if MaxDepth<11:
+            printModels(model=model,X=X,name=name,attackNames=attackNames)
+    #    print('Nothig Printed')
 
     #Predicting test Accuracies
     pred =  model.predict(X_test)
@@ -155,7 +159,7 @@ def printModels(model,X,name,attackNames):
     print("Printing Models")
     dot_data = StringIO()
     export_graphviz(model, out_file=dot_data, feature_names=X.columns,  
-                      class_names=attackNames, node_ids=True,
+                      class_names=attackNames, 
                       filled=True, rounded=True,
                       special_characters=True)
     graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
@@ -167,28 +171,33 @@ def Run_DecisionTree(dataset,labelCol,attackNames,Test_Data,Criterion):
     #Split and Train Data
     X,y,X_train,y_train,X_test,y_test= trainModels(dataset,labelCol)
 
-    #plot gini vs entropy accuracies
+    #use to plot gini vs entropy accuracies
     x_label = []
     acc_gini = []
     acc_entropy = []
 
-    #Testing Parameters: max_depth, impurity, max_leaf_nodes,  
-    #       impurity + max_depth, impurity + max_leaf_nodes
-
     #Create and Printing Models, Appends predicted accuracies based on Criterion, Appends MaxDepth
-    #Paths changed according to tested parameters   
     print("STARTIMG LOOP")
-    if(Test_Data['TwoParameter']):
-        LoopThis = (Test_Data['MaxDepth'] != None) if Test_Data['MaxDepth'] else Test_Data['MaxLeaf']
+    #Checks Whether or not it's Testing for Two Parameters
+    if(Test_Data['TwoParameters']):
+        print("TWO PARAMETERS")
+        LoopThis = Test_Data['MaxDepth'] if (Test_Data['MaxDepth'] != None) else Test_Data['MaxLeaf']
         for ImpureLoop in Test_Data['Impurity']:
+            x_label = []
+            acc_gini = []
+            acc_entropy = []
             for LoopParameter in LoopThis:
                 for Crit in Criterion :
-                    path= (Crit == 'gini') if "/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/DecisionTreeIDS/DecionTreeResults/Criterion_Gini/" else "/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/DecisionTreeIDS/DecionTreeResults/Criterion_Entropy/"
-                    name = (Crit == 'gini') if 'UNSW_Dataset_Features_Criterion_Gini_'+Test_Data['Name']+'_'+str(LoopParameter)+'.png' else 'UNSW_Dataset_Features_Criterion_Entropy_'+Test_Data['Name']+'_'+str(LoopParameter)+'.png'
+                    path= originalPath+"DecisionTreeIDS/DecisionTreeResults/Criterion_Gini/Impurity_Decreased/Impurity_"+str(ImpureLoop)+"/" if (Crit == 'gini')  else originalPath+"DecisionTreeIDS/DecisionTreeResults/Criterion_Entropy/Impurity_Decreased/Impurity_"+str(ImpureLoop)+"/"
+                    name = 'UNSW_Dataset_Features_Criterion_Gini_'+Test_Data['Name']+'_'+str(LoopParameter)+'_Impurity_'+str(ImpureLoop)+'.png' if (Crit == 'gini') else 'UNSW_Dataset_Features_Criterion_Entropy_'+Test_Data['Name']+'_'+str(LoopParameter)+'_Impurity_'+str(ImpureLoop)+'.png'
                     
+                    MaxDepth = LoopParameter if Test_Data['MaxDepth'] != None else Test_Data['MaxDepth']
+                    Impurity = ImpureLoop
+                    MaxLeaf = LoopParameter if Test_Data['MaxLeaf'] != None else Test_Data['MaxLeaf']
+
                     name = path+name
                     #Creates Gini Models
-                    pred_acc= CreateModel(Criterion=Crit,Test_Data=Test_Data, X=X,
+                    pred_acc= CreateModel(Criterion=Crit,Impurity=Impurity,MaxDepth=MaxDepth,MaxLeaf=MaxLeaf,Test_Data=Test_Data, X=X,
                                                                 X_train=X_train,y_train=y_train,X_test=X_test,y_test=y_test,
                                                                 name=name, attackNames=attackNames)
                     if (Crit == 'gini') :
@@ -199,16 +208,21 @@ def Run_DecisionTree(dataset,labelCol,attackNames,Test_Data,Criterion):
                 print("Loop: "+str(LoopParameter))
 
             plottingGraphs(x_label=x_label,acc_gini=acc_gini,acc_entropy=acc_entropy,Test_Data=Test_Data,ImpureLoop=ImpureLoop)
-    else: 
-        LoopThis = (Test_Data['MaxDepth'] != None) if Test_Data['MaxDepth'] else (Test_Data['MaxLeaf'] != None) if Test_Data['MaxLeaf'] else Test_Data['Impurity']
+    else:
+        print("ONE PARAMETER") 
+        LoopThis = Test_Data['MaxDepth'] if (Test_Data['MaxDepth'] != None) else (Test_Data['MaxLeaf'] if (Test_Data['MaxLeaf'] != None) else Test_Data['Impurity'])
         for LoopParameter in LoopThis:
             for Crit in Criterion :
-                path= (Crit == 'gini') if "/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/DecisionTreeIDS/DecionTreeResults/Criterion_Gini/" else "/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/DecisionTreeIDS/DecionTreeResults/Criterion_Entropy/"
-                name = (Crit == 'gini') if 'UNSW_Dataset_Features_Criterion_Gini_'+Test_Data['Name']+'_'+str(LoopParameter)+'.png' else 'UNSW_Dataset_Features_Criterion_Entropy_'+Test_Data['Name']+'_'+str(LoopParameter)+'.png'
+                path= originalPath+"DecisionTreeIDS/DecisionTreeResults/Criterion_Gini/" if (Crit == 'gini')  else originalPath+"DecisionTreeIDS/DecisionTreeResults/Criterion_Entropy/"
+                name = 'UNSW_Dataset_Features_Criterion_Gini_'+Test_Data['Name']+'_'+str(LoopParameter)+'.png' if (Crit == 'gini')  else 'UNSW_Dataset_Features_Criterion_Entropy_'+Test_Data['Name']+'_'+str(LoopParameter)+'.png'
                 
+                MaxDepth = LoopParameter if (Test_Data['MaxDepth'] != None) else Test_Data['MaxDepth']
+                Impurity = LoopParameter if (Test_Data['Impurity'] != 0.0) else Test_Data['Impurity']
+                MaxLeaf = LoopParameter if (Test_Data['MaxLeaf'] != None) else Test_Data['MaxLeaf']
+
                 name = path+name
                 #Creates Gini Models
-                pred_acc= CreateModel(Criterion=Crit,Test_Data=Test_Data, X=X,
+                pred_acc= CreateModel(Criterion=Crit,Impurity=Impurity,MaxDepth=MaxDepth,MaxLeaf=MaxLeaf,Test_Data=Test_Data, X=X,
                                                             X_train=X_train,y_train=y_train,X_test=X_test,y_test=y_test,
                                                             name=name, attackNames=attackNames)
                 if (Crit == 'gini') :
@@ -226,37 +240,42 @@ def plottingGraphs(x_label,acc_gini,acc_entropy,Test_Data,ImpureLoop):
             'acc_entropy':pd.Series(acc_entropy),
             'x_label':pd.Series(x_label)})
     # plots gini accuracies vs entropy accuracies graph, Saves plot diagram in Dataset Folder
+    #TempNames are made due to appending of Names, This is used to rename to original value
+    TempName = Test_Data['Name']
+    TempName2 = Test_Data['Table_Name']
     fig = plt.figure()
     plt.plot('x_label','acc_gini', data=d, label='gini')
     plt.plot('x_label','acc_entropy', data=d, label='entropy')
     plt.xlabel(Test_Data['Table_Name'])
     plt.ylabel('accuracy')
+
+    #Changes Path Based on Parameters
     if(Test_Data['TwoParameters']):
-        Test_Data['Table_Name'] = Test_Data['Table_Name']+' Impurity('+ImpureLoop+')'
+        Test_Data['Table_Name'] = Test_Data['Table_Name']+' Impurity('+str(ImpureLoop)+')'
+        Test_Data['Name'] = Test_Data['Name']+'Impurity('+str(ImpureLoop)+')'
         if(Test_Data['MaxDepth'] != None):
-            figPath="/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/DecisionTreeIDS/DecionTreeResults/Gini_vs_Entropy_Accuracy_Graphs/Impurity_Decreased_Plus_Max_Depth"
+            figPath=originalPath+"DecisionTreeIDS/DecisionTreeResults/Gini_vs_Entropy_Accuracy_Graphs/Impurity_Decreased_Plus_Max_Depth/"
         else:
-            figPath="/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/DecisionTreeIDS/DecionTreeResults/Gini_vs_Entropy_Accuracy_Graphs/Impurity_Decreased_Plus_Max_Leaf_Nodes"
+            figPath=originalPath+"DecisionTreeIDS/DecisionTreeResults/Gini_vs_Entropy_Accuracy_Graphs/Impurity_Decreased_Plus_Max_Leaf_Nodes/"
     else:
-        figPath="/media/southpark86/AMG1/School/Spring 2020/Intrusion Detection/Individual Project/DecisionTreeIDS/DecionTreeResults/Gini_vs_Entropy_Accuracy_Graphs/"
+        figPath=originalPath+"DecisionTreeIDS/DecisionTreeResults/Gini_vs_Entropy_Accuracy_Graphs/Gini_vs_Entropy_Accuracy_Graphs/"
             
     plt.title('Gini vs Entropy - Accuracy vs '+Test_Data['Table_Name'])
     plt.legend()
     #plt.show()
-    fig.savefig(figPath+'Gini_vs_Entropy_Feature_'+Test_Data['Name']+'.png')
+    figPath = figPath+'Gini_vs_Entropy_Feature_'+Test_Data['Name']
+    fig.savefig(figPath+'.png')
+    Test_Data['Name']=TempName
+    Test_Data['Table_Name']=TempName2
 
 #Testing Parameters: Criterion, max_depth, impurity, max_leaf_nodes, 
 def Run_All_Test():
-    #Test one: MaxDepth=range(1,31),Impurity=0.0,MaxLeaf=None
-    #Test two: MaxDepth=None,Impurity=0.0,MaxLeaf=range(2,31)
-    #Test three: MaxDepth=None,Impurity=[.00005,.0001,.0005,.001,.005,.01,.05,.1,.5,1],MaxLeaf=None
-    
     #Loading up Data for Testing
     dataset,attackNames,labelCol = Load_Data_Set()
     #Ran Decision Tree
     for Test_Data in Test_List :
         Run_DecisionTree(dataset=dataset,labelCol=labelCol,attackNames=attackNames, Test_Data=Test_Data,Criterion=Criterion)
         print("Finished: ",Test_Data['Name'])
-    
 
+#Automated to Run all Test in One Run; Just Run Program to start
 Run_All_Test()
